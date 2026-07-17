@@ -55,9 +55,14 @@ COBALT_API_URL="http://IP_VPS_ANDA:9000/api/json"
 TIKTOK_SEARCH_API_URL="http://IP_VPS_ANDA:3000/api/search"
 ```
 
-Ekspor cookie dari akun Pinterest kamu (gunakan ekstensi browser seperti EditThisCookie), lalu simpan dengan nama **`cookies.json`** di root folder bot.
+### 3. Cookies Akun Pinterest
+Bot ini tidak menggunakan password, melainkan Cookie Login untuk mengakses akun Pinterest Anda. 
+1. Login ke akun Pinterest di browser PC Anda.
+2. Gunakan ekstensi seperti **EditThisCookie** atau **Cookie-Editor**.
+3. Export cookie Pinterest Anda dalam format JSON.
+4. Buat file baru bernama `cookies.json` di root folder proyek ini dan *paste* cookie tersebut.
 
-### 3. Data Produk
+### 4. Data Produk
 Taruh daftar produk affiliate dari Shopee kamu ke dalam file `data/shopee_products.json`.
 
 ---
