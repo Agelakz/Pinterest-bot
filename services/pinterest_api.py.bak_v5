@@ -1,0 +1,152 @@
+import os
+import logging
+import requests
+import time
+
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+logger = logging.getLogger(__name__)
+
+class PinterestAPI:
+    BASE_URL = "https://api.pinterest.com/v5"
+    MAX_FILE_SIZE_MB = 200 # Asumsi batas API
+
+    def __init__(self, token=None):
+        self.token = token or os.getenv("PINTEREST_ACCESS_TOKEN")
+        if not self.token:
+            raise ValueError("PINTEREST_ACCESS_TOKEN missing di .env")
+        
+        self.session = requests.Session()
+        self.session.headers.update({
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json"
+        })
+
+    def request(self, method, endpoint, **kwargs):
+        url = f"{self.BASE_URL}/{endpoint.lstrip('/')}"
+        resp = self.session.request(method, url, **kwargs)
+        if not resp.ok:
+            logger.error(f"API Error {resp.status_code}: {resp.text}")
+            resp.raise_for_status()
+        return resp.json()
+
+    def validate_token(self):
+        try:
+            self.get_profile()
+            return True
+        except Exception:
+            return False
+
+    def get_profile(self):
+        return self.request("GET", "user_account")
+
+    def get_boards(self):
+        return self.request("GET", "boards")
+
+    def upload_media(self, video_path):
+        try:
+            logger.info("Checking file...")
+            if not os.path.exists(video_path):
+                raise FileNotFoundError(f"File {video_path} not found")
+            
+            size_bytes = os.path.getsize(video_path)
+            size_mb = size_bytes / (1024 * 1024)
+            if size_bytes == 0:
+                raise ValueError("File is empty")
+            if size_mb > self.MAX_FILE_SIZE_MB:
+                raise ValueError(f"File too large ({size_mb:.1f}MB)")
+            if not video_path.lower().endswith(".mp4"):
+                raise ValueError("Only .mp4 format is supported")
+            
+            logger.info("File OK")
+            
+            # Pinterest Video Upload Flow (v5)
+            # 1. Register
+            logger.info("Registering media upload...")
+            register_payload = {"media_type": "video"}
+            register_resp = self.request("POST", "media", json=register_payload)
+            
+            media_id = register_resp.get("media_id")
+            upload_url = register_resp.get("upload_url")
+            upload_params = register_resp.get("upload_parameters", {})
+            
+            if not media_id or not upload_url:
+                raise ValueError("Invalid registration response")
+            
+            # 2. Upload to S3 (upload_url)
+            logger.info("Uploading media...")
+            with open(video_path, 'rb') as f:
+                files = {'file': f}
+                # Request POST ke S3 URL yang dikasih Pinterest, TANPA auth header (bisa error auth S3 kalau ada Bearer)
+                s3_resp = requests.post(upload_url, data=upload_params, files=files)
+            
+            if not s3_resp.ok:
+                raise Exception(f"S3 Upload failed: {s3_resp.status_code} - {s3_resp.text}")
+            
+            logger.info("Upload completed")
+            logger.info(f"Media ID: {media_id}")
+            
+            return {
+                "success": True,
+                "media_id": media_id,
+                "status": "uploaded"
+            }
+            
+        except Exception as e:
+            logger.error("Upload failed")
+            logger.error(f"Reason: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "status": "failed"
+            }
+
+    def create_pin(self, media_id, title, description, board_id, destination_url):
+        try:
+            logger.info("Validating media...")
+            if not media_id: raise ValueError("media_id tidak boleh kosong")
+            if not board_id: raise ValueError("board_id valid dibutuhkan")
+            if not title: raise ValueError("title tidak boleh kosong")
+            if not description: raise ValueError("description tidak boleh kosong")
+            if not destination_url or not destination_url.startswith("https://"):
+                raise ValueError("destination_url valid (https://...) dibutuhkan")
+            
+            logger.info("Media OK")
+            logger.info("Creating Pin...")
+            
+            payload = {
+                "board_id": board_id,
+                "title": title,
+                "description": description,
+                "link": destination_url,
+                "media_source": {
+                    "source_type": "video_id",
+                    "cover_image_url": "https://placehold.co/400x600.png",
+                    "media_id": media_id
+                }
+            }
+            
+            resp = self.request("POST", "pins", json=payload)
+            logger.info("Waiting Pinterest response...")
+            
+            pin_id = resp.get("id")
+            if not pin_id:
+                raise ValueError("Gagal membuat pin, ID tidak ditemukan")
+                
+            pin_url = f"https://www.pinterest.com/pin/{pin_id}/"
+            logger.info("Pin Created")
+            logger.info(f"Pin ID: {pin_id}")
+            logger.info(f"URL: {pin_url}")
+            
+            return {
+                "success": True,
+                "pin_id": pin_id,
+                "pin_url": pin_url,
+                "status": "published"
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "status": "failed"
+            }

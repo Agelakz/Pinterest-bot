@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+build/
+dist/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Project specific / Sensitive files
+cookies.json
+all_cookies.txt
+*.har
+api_creates.json
+api_creates_decoded.txt
+data/*.json  # Tergantung lu mau nge-push database lo (shopee_products.json / boards_registry.json) atau enggak. Kalo ngga, biarin gini.
+
+# Temp & Logs
+temp/
+*.log
+scheduler.log
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
